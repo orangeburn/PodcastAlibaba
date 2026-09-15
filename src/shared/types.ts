@@ -12,6 +12,25 @@ export interface TtsConfig {
 
 export interface Segment {
   id: string;
+  /** Added in the generation-chunk format; absent in legacy project files. */
+  paragraphId?: string;
+  sentenceIndex?: number;
+  text: string;
+  textHash: string;
+  pauseMs: number;
+  status: SegmentStatus;
+  /** @deprecated Sentence audio is no longer used by the generation model. */
+  audioPath?: string;
+  /** @deprecated Request metadata now belongs to GenerationChunk. */
+  requestId?: string;
+  error?: string;
+  updatedAt?: string;
+}
+
+export interface GenerationChunk {
+  id: string;
+  paragraphId: string;
+  segmentIds: string[];
   text: string;
   textHash: string;
   pauseMs: number;
@@ -27,6 +46,7 @@ export interface Project {
   title: string;
   markdown: string;
   segments: Segment[];
+  generationChunks?: GenerationChunk[];
   tts: TtsConfig;
   voiceId: string;
   finalAudioPath?: string;
@@ -47,12 +67,15 @@ export interface AppSettings extends TtsConfig {
   voices: Voice[];
 }
 
-export interface GenerateSegmentInput {
+export interface GenerateChunkInput {
   projectId: string;
-  segmentId: string;
+  chunkId: string;
   text: string;
   config: TtsConfig;
 }
+
+/** @deprecated Use GenerateChunkInput. */
+export type GenerateSegmentInput = GenerateChunkInput;
 
 export interface CloneVoiceInput {
   config: TtsConfig;
@@ -78,7 +101,7 @@ export interface IpcApi {
   };
   audio: {
     chooseReference: () => Promise<string | null>;
-    generate: (input: GenerateSegmentInput) => Promise<{ audioPath: string; requestId?: string }>;
+    generate: (input: GenerateChunkInput) => Promise<{ audioPath: string; requestId?: string }>;
     compose: (project: Project) => Promise<string>;
     getDataUrl: (audioPath: string) => Promise<string>;
     export: (audioPath: string) => Promise<string | null>;

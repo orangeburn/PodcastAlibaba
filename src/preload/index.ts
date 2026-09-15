@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppSettings, CloneVoiceInput, GenerateSegmentInput, IpcApi, Project, Voice } from "../shared/types";
+import type { AppSettings, CloneVoiceInput, GenerateChunkInput, IpcApi, Project, Voice } from "../shared/types";
 
 const api: IpcApi = {
   projects: {
@@ -19,7 +19,7 @@ const api: IpcApi = {
   },
   audio: {
     chooseReference: () => ipcRenderer.invoke("audio:choose-reference"),
-    generate: (input: GenerateSegmentInput) => ipcRenderer.invoke("audio:generate", input),
+    generate: (input: GenerateChunkInput) => ipcRenderer.invoke("audio:generate", input),
     compose: (project: Project) => ipcRenderer.invoke("audio:compose", project),
     getDataUrl: (audioPath: string) => ipcRenderer.invoke("audio:get-data-url", audioPath),
     export: (audioPath: string) => ipcRenderer.invoke("audio:export", audioPath),

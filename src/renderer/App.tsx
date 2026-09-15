@@ -37,8 +37,9 @@ import {
   Textarea as EasyTextarea,
 } from "../../easyget-ui/src";
 import "../../easyget-ui/src/styles.css";
+import { buildGenerationChunks, markGenerationChunksStale, normalizeProject, projectChunks, syncSegmentStatuses } from "../shared/generation";
 import { parseMarkdown } from "../shared/parser";
-import type { AppSettings, Project, Segment, SegmentStatus, TtsConfig, Voice } from "../shared/types";
+import type { AppSettings, GenerationChunk, Project, Segment, SegmentStatus, TtsConfig, Voice } from "../shared/types";
 
 type View = "projects" | "studio" | "voices" | "settings";
 
@@ -81,8 +82,9 @@ function badgeTone(status: SegmentStatus): "neutral" | "brand" | "success" | "wa
 }
 
 function projectProgress(project: Project): { done: number; total: number; percent: number } {
-  const total = project.segments.length;
-  const done = project.segments.filter((segment) => segment.status === "success").length;
+  const chunks = projectChunks(project);
+  const total = chunks.length;
+  const done = chunks.filter((chunk) => chunk.status === "success" && Boolean(chunk.audioPath)).length;
   return { done, total, percent: total ? Math.round((done / total) * 100) : 0 };
 }
 
@@ -105,7 +107,7 @@ function App() {
   useEffect(() => {
     void Promise.all([window.podcastApi.projects.list(), window.podcastApi.settings.get()])
       .then(([loadedProjects, loadedSettings]) => {
-        setProjects(loadedProjects);
+        setProjects(loadedProjects.map(normalizeProject));
         setSettings(loadedSettings);
         setSettingsDraft(loadedSettings);
       })
@@ -126,8 +128,9 @@ function App() {
   const activeProgress = useMemo(() => (currentProject ? projectProgress(currentProject) : null), [currentProject]);
 
   function selectProject(project: Project, nextView: View = "studio") {
-    setCurrentProject(project);
-    projectRef.current = project;
+    const normalized = normalizeProject(project);
+    setCurrentProject(normalized);
+    projectRef.current = normalized;
     setView(nextView);
   }
 
@@ -161,13 +164,18 @@ function App() {
       if (!imported) return;
       const project = projectRef.current;
       if (!project) return;
+      const segments = parseMarkdown(imported.content, project.segments);
+      const generationChunks = buildGenerationChunks(segments, projectChunks(project));
       const next: Project = {
         ...project,
         title: project.title === "未命名 Podcast" ? imported.name : project.title,
         markdown: imported.content,
-        segments: parseMarkdown(imported.content, project.segments),
+        segments: syncSegmentStatuses(segments, generationChunks),
+        generationChunks,
         finalAudioPath: undefined,
       };
+      setAudioSrc({});
+      setPlayingId(null);
       await saveProject(next);
       setNotice({ type: "success", text: `已导入 ${imported.name}.md，并完成自动分段。` });
     } catch (error) {
@@ -178,7 +186,17 @@ function App() {
   async function updateScript(markdown: string) {
     const project = projectRef.current;
     if (!project) return;
-    const next: Project = { ...project, markdown, segments: parseMarkdown(markdown, project.segments), finalAudioPath: undefined };
+    const segments = parseMarkdown(markdown, project.segments);
+    const generationChunks = buildGenerationChunks(segments, projectChunks(project));
+    const next: Project = {
+      ...project,
+      markdown,
+      segments: syncSegmentStatuses(segments, generationChunks),
+      generationChunks,
+      finalAudioPath: undefined,
+    };
+    setAudioSrc({});
+    setPlayingId(null);
     setCurrentProject(next);
     projectRef.current = next;
     setProjects((items) => items.map((item) => (item.id === next.id ? next : item)));
@@ -208,15 +226,19 @@ function App() {
     if (!project) return;
     const nextConfig = { ...project.tts, ...patch };
     const changed = JSON.stringify(nextConfig) !== JSON.stringify(project.tts);
+    const generationChunks = changed ? markGenerationChunksStale(projectChunks(project)) : projectChunks(project);
     const next: Project = {
       ...project,
       tts: nextConfig,
       voiceId: nextConfig.voiceId,
       finalAudioPath: changed ? undefined : project.finalAudioPath,
-      segments: changed
-        ? project.segments.map((segment) => (segment.status === "success" ? { ...segment, status: "needs-update" } : segment))
-        : project.segments,
+      generationChunks,
+      segments: syncSegmentStatuses(project.segments, generationChunks),
     };
+    if (changed) {
+      setAudioSrc({});
+      setPlayingId(null);
+    }
     setCurrentProject(next);
     projectRef.current = next;
     setProjects((items) => items.map((item) => (item.id === next.id ? next : item)));
@@ -227,43 +249,61 @@ function App() {
     }
   }
 
-  async function generateSegment(segmentId: string) {
+  async function generateChunk(chunkId: string) {
     const project = projectRef.current;
     if (!project) return false;
-    const segment = project.segments.find((item) => item.id === segmentId);
-    if (!segment) return false;
+    const chunk = projectChunks(project).find((item) => item.id === chunkId);
+    if (!chunk) return false;
     setBusy(true);
+    const staleAudioPaths = [chunk.audioPath, project.finalAudioPath].filter((audioPath): audioPath is string => Boolean(audioPath));
+    if (staleAudioPaths.length > 0) {
+      setAudioSrc((items) => {
+        const next = { ...items };
+        for (const audioPath of staleAudioPaths) delete next[audioPath];
+        return next;
+      });
+    }
+    if (playingId === chunkId || playingId === "final") setPlayingId(null);
+    const generationChunks = projectChunks(project).map((item) =>
+      item.id === chunkId
+        ? { ...item, status: "generating" as const, audioPath: undefined, requestId: undefined, error: undefined }
+        : item,
+    );
     const generating: Project = {
       ...project,
-      segments: project.segments.map((item) => (item.id === segmentId ? { ...item, status: "generating", error: undefined } : item)),
+      generationChunks,
+      segments: syncSegmentStatuses(project.segments, generationChunks),
+      finalAudioPath: undefined,
     };
     await saveProject(generating);
     try {
       const result = await window.podcastApi.audio.generate({
         projectId: project.id,
-        segmentId,
-        text: segment.text,
+        chunkId,
+        text: chunk.text,
         config: project.tts,
       });
       const latest = projectRef.current ?? generating;
-      await saveProject({
-        ...latest,
-        segments: latest.segments.map((item) =>
-          item.id === segmentId
-            ? { ...item, status: "success", audioPath: result.audioPath, requestId: result.requestId, error: undefined, updatedAt: new Date().toISOString() }
-            : item,
-        ),
-        finalAudioPath: undefined,
-      });
+      const latestChunks = projectChunks(latest);
+      const latestChunk = latestChunks.find((item) => item.id === chunkId);
+      if (!latestChunk || latestChunk.textHash !== chunk.textHash || JSON.stringify(latest.tts) !== JSON.stringify(project.tts)) return false;
+      const completedChunks = latestChunks.map((item) =>
+        item.id === chunkId
+          ? { ...item, status: "success" as const, audioPath: result.audioPath, requestId: result.requestId, error: undefined, updatedAt: new Date().toISOString() }
+          : item,
+      );
+      await saveProject({ ...latest, generationChunks: completedChunks, segments: syncSegmentStatuses(latest.segments, completedChunks), finalAudioPath: undefined });
       return true;
     } catch (error) {
       const latest = projectRef.current ?? generating;
-      await saveProject({
-        ...latest,
-        segments: latest.segments.map((item) =>
-          item.id === segmentId ? { ...item, status: "failed", error: error instanceof Error ? error.message : "生成失败" } : item,
-        ),
-      });
+      const latestChunks = projectChunks(latest);
+      const latestChunk = latestChunks.find((item) => item.id === chunkId);
+      if (latestChunk?.textHash === chunk.textHash && JSON.stringify(latest.tts) === JSON.stringify(project.tts)) {
+        const failedChunks = latestChunks.map((item) =>
+          item.id === chunkId ? { ...item, status: "failed" as const, error: error instanceof Error ? error.message : "生成失败" } : item,
+        );
+        await saveProject({ ...latest, generationChunks: failedChunks, segments: syncSegmentStatuses(latest.segments, failedChunks), finalAudioPath: undefined });
+      }
       setNotice({ type: "error", text: error instanceof Error ? error.message : "生成失败" });
       return false;
     } finally {
@@ -274,14 +314,14 @@ function App() {
   async function generateAll() {
     const project = projectRef.current;
     if (!project || busy) return;
-    const ids = project.segments.filter((segment) => segment.status !== "success").map((segment) => segment.id);
+    const ids = projectChunks(project).filter((chunk) => chunk.status !== "success" || !chunk.audioPath).map((chunk) => chunk.id);
     if (!ids.length) {
       await composeFinal();
       return;
     }
-    for (const segmentId of ids) await generateSegment(segmentId);
+    for (const chunkId of ids) await generateChunk(chunkId);
     const latest = projectRef.current;
-    if (latest && latest.segments.length > 0 && latest.segments.every((segment) => segment.status === "success")) {
+    if (latest && projectChunks(latest).length > 0 && projectChunks(latest).every((chunk) => chunk.status === "success" && Boolean(chunk.audioPath))) {
       await composeFinal();
     }
   }
@@ -397,7 +437,7 @@ function App() {
         {notice && <div className={`toast toast-${notice.type}`}><span>{notice.text}</span><button onClick={() => setNotice(null)}><X size={15} /></button></div>}
 
         {view === "projects" && <ProjectsPage projects={projects} onCreate={requestCreateProject} onOpen={selectProject} />}
-        {view === "studio" && currentProject && <StudioPage project={currentProject} progress={activeProgress!} voices={settings.voices} busy={busy} audioSrc={audioSrc} playingId={playingId} onTitleChange={updateTitle} onScriptChange={updateScript} onImport={importMarkdown} onConfigChange={updateTtsConfig} onPlay={playAudio} onGenerate={generateSegment} onGenerateAll={generateAll} onCompose={composeFinal} onExport={async () => { if (currentProject.finalAudioPath) { const output = await window.podcastApi.audio.export(currentProject.finalAudioPath); if (output) setNotice({ type: "success", text: `已导出到 ${output}` }); } }} />}
+        {view === "studio" && currentProject && <StudioPage project={currentProject} progress={activeProgress!} voices={settings.voices} busy={busy} audioSrc={audioSrc} playingId={playingId} onTitleChange={updateTitle} onScriptChange={updateScript} onImport={importMarkdown} onConfigChange={updateTtsConfig} onPlay={playAudio} onGenerate={generateChunk} onGenerateAll={generateAll} onCompose={composeFinal} onExport={async () => { if (currentProject.finalAudioPath) { const output = await window.podcastApi.audio.export(currentProject.finalAudioPath); if (output) setNotice({ type: "success", text: `已导出到 ${output}` }); } }} />}
         {view === "voices" && <VoicesPage voices={settings.voices} onClone={() => setCloneOpen(true)} onAdd={() => setManualVoiceOpen(true)} onDelete={deleteVoice} />}
         {view === "settings" && <SettingsPage settings={settingsDraft} onChange={(patch) => setSettingsDraft((current) => ({ ...current, ...patch }))} onSave={saveSettings} />}
       </main>
@@ -429,15 +469,17 @@ function StudioPage({ project, progress, voices, busy, audioSrc, playingId, onTi
   function commitScript() { if (localScript !== project.markdown) onScriptChange(localScript); }
   function commitTitle() { if (localTitle !== project.title) onTitleChange(localTitle); }
 
+  const chunks = projectChunks(project);
+  const chunkBySegmentId = new Map(chunks.flatMap((chunk) => chunk.segmentIds.map((segmentId) => [segmentId, chunk] as const)));
   return <div className="page page-studio"><div className="studio-heading"><div className="studio-title-wrap"><div><input className="title-input" aria-label="项目名称" value={localTitle} onChange={(event) => setLocalTitle(event.target.value)} onBlur={commitTitle} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }} /><div className="saved-line"><span className="saved-dot" />自动保存 · 本地项目</div></div></div><div className="studio-actions"><button className="secondary-button small" onClick={onImport}><Upload size={15} />导入 .md</button><button className="primary-button small" onClick={onGenerateAll} disabled={busy || progress.total === 0}><Sparkles size={15} />{busy ? "生成中…" : "生成全部"}</button></div></div>
     <div className="studio-layout"><section className="script-panel panel"><div className="panel-header"><div><span className="panel-kicker">SOURCE SCRIPT</span><h2>Markdown 稿件</h2></div><span className="panel-count">{localScript.length.toLocaleString()} 字</span></div><textarea className="script-editor" value={localScript} onChange={(event) => setLocalScript(event.target.value)} onBlur={commitScript} placeholder={'从这里开始写你的稿件…\n\n支持 Markdown 标题、段落、列表与链接。生成前会自动清理格式，但会保留结构进行分段。'} spellCheck={false} /><div className="editor-footer"><span><FileText size={14} />内容是项目唯一稿件源</span><button className="text-button" onClick={commitScript}><Save size={14} />保存稿件</button></div></section>
-      <section className="segments-panel"><div className="panel-header segments-header"><div><span className="panel-kicker">VOICE TIMELINE</span><h2>分段结果 <span className="count-pill">{progress.total}</span></h2></div><div className="segment-progress"><span>{progress.done}/{progress.total} 已生成</span><div className="mini-progress"><div style={{ width: `${progress.percent}%` }} /></div></div></div>{project.segments.length === 0 ? <div className="segments-empty"><div className="empty-lines"><span /><span /><span /></div><p>输入稿件后将自动解析成适合 TTS 的语义片段。</p></div> : <div className="segment-list">{project.segments.map((segment, index) => <SegmentRow key={segment.id} segment={segment} index={index} audioSrc={audioSrc[segment.audioPath ?? ""]} playing={playingId === segment.id} busy={busy} onPlay={onPlay} onGenerate={onGenerate} />)}</div>}</section></div>
+      <section className="segments-panel"><div className="panel-header segments-header"><div><span className="panel-kicker">VOICE TIMELINE</span><h2>句子逻辑单元 <span className="count-pill">{project.segments.length}</span></h2></div><div className="segment-progress"><span>{progress.done}/{progress.total} 个生成单元已生成</span><div className="mini-progress"><div style={{ width: `${progress.percent}%` }} /></div></div></div>{project.segments.length === 0 ? <div className="segments-empty"><div className="empty-lines"><span /><span /><span /></div><p>输入稿件后将自动解析成句子逻辑单元，并按自然段生成音频。</p></div> : <div className="segment-list">{project.segments.map((segment, index) => { const chunk = chunkBySegmentId.get(segment.id); if (!chunk) return null; return <SegmentRow key={segment.id} segment={segment} chunk={chunk} index={index} audioSrc={audioSrc[chunk.audioPath ?? ""]} playing={playingId === chunk.id && chunk.segmentIds[0] === segment.id} busy={busy} onPlay={onPlay} onGenerate={onGenerate} />; })}</div>}</section></div>
     <div className="bottom-dock"><div className="dock-config"><div className="dock-label"><SlidersHorizontal size={15} /><span>TTS 配置</span></div><select value={project.tts.voiceId} onChange={(event) => onConfigChange({ voiceId: event.target.value })}><option value="">选择音色…</option>{voices.map((voice) => <option key={voice.id} value={voice.voiceId}>{voice.name} · {voice.model}</option>)}</select><div className="voice-id-field"><span>Voice ID</span><input value={project.tts.voiceId} onChange={(event) => onConfigChange({ voiceId: event.target.value })} placeholder="手动填写" /></div><label className="compact-control"><span>语速</span><input type="number" min="0.5" max="2" step="0.05" value={project.tts.speed} onChange={(event) => onConfigChange({ speed: Number(event.target.value) })} /></label><label className="compact-control"><span>音量</span><input type="number" min="0" max="100" step="1" value={project.tts.volume} onChange={(event) => onConfigChange({ volume: Number(event.target.value) })} /></label></div><div className="dock-output">{project.finalAudioPath && audioSrc[project.finalAudioPath] ? <audio controls src={audioSrc[project.finalAudioPath]} /> : project.finalAudioPath ? <button className="secondary-button" disabled={busy} onClick={() => onPlay("final", project.finalAudioPath)}><Play size={15} />完整试听</button> : <button className="secondary-button" disabled={!readyForCompose || busy} onClick={onCompose}>{readyForCompose ? <><Play size={15} />生成完整试听</> : "完成全部片段后试听"}</button>}<button className="export-button" disabled={!project.finalAudioPath || busy} onClick={onExport}><FileAudio size={16} />导出 WAV</button></div></div>
   </div>;
 }
 
-function SegmentRow({ segment, index, audioSrc, playing, busy, onPlay, onGenerate }: { segment: Segment; index: number; audioSrc?: string; playing: boolean; busy: boolean; onPlay: (id: string, path?: string) => void; onGenerate: (id: string) => void }) {
-  return <article className={`segment-row ${segment.status === "generating" ? "segment-generating" : ""}`}><div className="segment-index">{String(index + 1).padStart(2, "0")}</div><div className="segment-body"><div className="segment-topline"><EasyBadge className={statusClass(segment.status)} tone={badgeTone(segment.status)}>{segment.status === "generating" && <LoaderCircle size={11} className="spin" />}{statusLabel(segment.status)}</EasyBadge><span className="segment-pause">停顿 {segment.pauseMs}ms</span></div><p>{segment.text}</p>{segment.error && <div className="segment-error">{segment.error}</div>}{playing && audioSrc && <audio className="segment-audio" controls autoPlay src={audioSrc} />}</div><div className="segment-actions"><button className="round-button" disabled={!segment.audioPath || segment.status !== "success"} onClick={() => onPlay(segment.id, segment.audioPath)} title="试听">{playing ? <Pause size={15} /> : <Play size={15} />}</button><button className="round-button" disabled={busy || segment.status === "generating"} onClick={() => onGenerate(segment.id)} title="重新生成"><RefreshCw size={15} /></button></div></article>;
+function SegmentRow({ segment, chunk, index, audioSrc, playing, busy, onPlay, onGenerate }: { segment: Segment; chunk: GenerationChunk; index: number; audioSrc?: string; playing: boolean; busy: boolean; onPlay: (id: string, path?: string) => void; onGenerate: (id: string) => void }) {
+  return <article className={`segment-row ${chunk.status === "generating" ? "segment-generating" : ""}`}><div className="segment-index">{String(index + 1).padStart(2, "0")}</div><div className="segment-body"><div className="segment-topline"><EasyBadge className={statusClass(chunk.status)} tone={badgeTone(chunk.status)}>{chunk.status === "generating" && <LoaderCircle size={11} className="spin" />}{statusLabel(chunk.status)}</EasyBadge><span className="segment-pause">段尾停顿 {chunk.pauseMs}ms</span><span className="segment-pause">同一生成单元 · {chunk.segmentIds.length}句</span></div><p>{segment.text}</p>{chunk.error && <div className="segment-error">{chunk.error}</div>}{playing && audioSrc && <audio className="segment-audio" controls autoPlay src={audioSrc} />}</div><div className="segment-actions"><button className="round-button" disabled={!chunk.audioPath || chunk.status !== "success"} onClick={() => onPlay(chunk.id, chunk.audioPath)} title="试听整个生成单元">{playing ? <Pause size={15} /> : <Play size={15} />}</button><button className="round-button" disabled={busy || chunk.status === "generating"} onClick={() => onGenerate(chunk.id)} title="重新生成整个生成单元"><RefreshCw size={15} /></button></div></article>;
 }
 
 function VoicesPage({ voices, onClone, onAdd, onDelete }: { voices: Voice[]; onClone: () => void; onAdd: () => void; onDelete: (voice: Voice) => void }) {

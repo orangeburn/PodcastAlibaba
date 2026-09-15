@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AppSettings, CloneVoiceInput, GenerateSegmentInput, Project, Voice } from "../shared/types";
+import type { AppSettings, CloneVoiceInput, GenerateChunkInput, Project, Voice } from "../shared/types";
 import { composeProject } from "./audio";
 import { AliyunCosyVoiceProvider } from "./aliyunProvider";
 import { LocalStore } from "./store";
@@ -40,7 +40,7 @@ function registerIpc(): void {
     });
     return result.canceled ? null : result.filePaths[0] ?? null;
   });
-  ipcMain.handle("audio:generate", (_event, input: GenerateSegmentInput) => provider.synthesize(input));
+  ipcMain.handle("audio:generate", (_event, input: GenerateChunkInput) => provider.synthesize(input));
   ipcMain.handle("audio:compose", (_event, project: Project) => composeProject(store, project));
   ipcMain.handle("audio:get-data-url", async (_event, audioPath: string) => {
     const buffer = await fs.readFile(audioPath);

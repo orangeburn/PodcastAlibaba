@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Project } from "../shared/types";
+import { projectChunks } from "../shared/generation";
 import { LocalStore } from "./store";
 
 interface WavData {
@@ -64,18 +65,18 @@ function silence(ms: number, wav: WavData): Buffer {
 
 export async function composeProject(store: LocalStore, project: Project): Promise<string> {
   const audioParts: WavData[] = [];
-  for (const segment of project.segments) {
-    if (segment.status !== "success" || !segment.audioPath) {
-      throw new Error("请先生成全部片段，再拼接完整音频");
+  for (const chunk of projectChunks(project)) {
+    if (chunk.status !== "success" || !chunk.audioPath) {
+      throw new Error("请先生成全部语义段，再拼接完整音频");
     }
-    const wav = readWav(await fs.readFile(segment.audioPath));
+    const wav = readWav(await fs.readFile(chunk.audioPath));
     const previous = audioParts.at(-1);
     if (previous && (previous.sampleRate !== wav.sampleRate || previous.channels !== wav.channels || previous.bitsPerSample !== wav.bitsPerSample)) {
       throw new Error("片段音频格式不一致，无法拼接");
     }
     audioParts.push(wav);
-    if (segment.pauseMs > 0) {
-      audioParts.push({ ...wav, data: silence(segment.pauseMs, wav) });
+    if (chunk.pauseMs > 0) {
+      audioParts.push({ ...wav, data: silence(chunk.pauseMs, wav) });
     }
   }
   if (audioParts.length === 0) throw new Error("当前项目没有可拼接的片段");

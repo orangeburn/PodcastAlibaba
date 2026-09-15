@@ -1,8 +1,6 @@
 import { hashText } from "./hash";
 import type { Segment } from "./types";
 
-const clauseEnd = /[，、,、：:]+[”’》）)]?/;
-
 function cleanMarkdownLine(line: string): string {
   return line
     .replace(/^\s{0,3}#{1,6}\s+/, "")
@@ -18,23 +16,6 @@ function cleanMarkdownLine(line: string): string {
     .replace(/\\([*_#\[\]()])/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function splitLongSentence(sentence: string): string[] {
-  if (sentence.length <= 220) return [sentence];
-
-  const output: string[] = [];
-  let rest = sentence;
-  while (rest.length > 220) {
-    const window = rest.slice(0, 220);
-    const clauseMatches = [...window.matchAll(new RegExp(clauseEnd.source, "g"))];
-    const match = clauseMatches.at(-1);
-    const splitAt = match?.index !== undefined ? match.index + match[0].length : 220;
-    output.push(rest.slice(0, splitAt).trim());
-    rest = rest.slice(splitAt).trim();
-  }
-  if (rest) output.push(rest);
-  return output;
 }
 
 function pauseFor(text: string, isParagraphEnd: boolean): number {
@@ -89,8 +70,9 @@ export function parseMarkdown(markdown: string, previous: Segment[] = []): Segme
   paragraphs.forEach((paragraph, paragraphIndex) => {
     const sentences = paragraph
       .split(/(?<=[。！？!?；;])\s*/u)
-      .flatMap((sentence) => splitLongSentence(sentence.trim()))
+      .map((sentence) => sentence.trim())
       .filter(Boolean);
+    const paragraphId = `paragraph-${paragraphIndex}`;
 
     sentences.forEach((text, sentenceIndex) => {
       const textHash = hashText(text);
@@ -98,16 +80,20 @@ export function parseMarkdown(markdown: string, previous: Segment[] = []): Segme
       const isParagraphEnd = sentenceIndex === sentences.length - 1;
       const segment: Segment = reused
         ? {
-            ...reused,
             id: `segment-${paragraphIndex}-${sentenceIndex}-${textHash}`,
+            paragraphId,
+            sentenceIndex,
             text,
             textHash,
             pauseMs: pauseFor(text, isParagraphEnd),
             status: reused.status === "success" ? "success" : "needs-update",
             error: undefined,
+            updatedAt: reused.updatedAt,
           }
         : {
             id: `segment-${paragraphIndex}-${sentenceIndex}-${textHash}`,
+            paragraphId,
+            sentenceIndex,
             text,
             textHash,
             pauseMs: pauseFor(text, isParagraphEnd),

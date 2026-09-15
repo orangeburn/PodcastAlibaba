@@ -16,7 +16,8 @@ src/
 │  ├─ App.tsx              项目、工作台、音色库、设置页面
 │  └─ styles.css           桌面端 UI
 └─ shared/
-   ├─ parser.ts            Markdown 清理与语义分段
+   ├─ parser.ts            Markdown 清理与句子逻辑分段
+   ├─ generation.ts        自然段 generation chunk 规划与 stale 状态
    ├─ hash.ts              片段文本 hash
    └─ types.ts             项目与 IPC 类型
 
@@ -58,8 +59,9 @@ C:\Users\<用户名>\AppData\Roaming\podcast-alibaba\podcast-data
 2. 默认 Base URL 是 `https://dashscope.aliyuncs.com/api/v1`，默认模型是 `cosyvoice-v3.5-flash`。
 3. 可在“音色库”添加已有 Voice ID，或选择本地 WAV / MP3 / M4A 创建新音色。
 4. 新建项目，直接输入 Markdown 或导入 `.md` 文件。
-5. 工作台会按标题、段落、列表和中文标点自动分段；只重新生成文本 hash 发生变化或标记为需要更新的片段。
-6. 生成全部片段后，应用会在本地按原顺序加入分级停顿并拼接为 WAV，完成试听后可以导出。
+5. 工作台会按标题、段落、列表和中文标点解析句子逻辑单元；同一自然段默认只发起一次 TTS 请求。
+6. 自然段超过应用侧采用的 CosyVoice 220 字请求安全上限时，应用只在完整句子边界拆成多个 generation chunks。任一句子变化都会使所属 chunk 标记为需要更新，并重新生成整个 chunk。
+7. 所有 chunk 生成完成后，应用会按原顺序加入段尾停顿并拼接为 WAV，完成试听后可以导出。
 
 声音复刻使用百炼官方临时文件上传流程：应用先用 API Key 获取上传 policy，将本地参考音频上传到百炼临时 OSS，取得有效期 48 小时的 `oss://` 地址，再提交 `voice-enrollment / create_voice`。复刻音色的 `target_model` 与后续 TTS 模型必须一致。
 
@@ -71,7 +73,7 @@ npm run build
 npm start
 ```
 
-可手动验证：新建项目 → 输入 Markdown → 检查分段 → 修改一个片段 → 确认其他成功片段仍复用 → 生成 → 完整试听 → 导出 WAV。真实 TTS 调用需要有效的百炼 API Key、Voice ID 和网络连接。
+可手动验证：新建项目 → 输入 Markdown → 检查句子与生成单元 → 修改一个句子 → 确认所属 chunk 需要更新而其他成功 chunk 仍复用 → 生成 → 完整试听 → 导出 WAV。真实 TTS 调用需要有效的百炼 API Key、Voice ID 和网络连接。
 
 ## 官方接口依据
 

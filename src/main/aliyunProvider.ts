@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { CloneVoiceInput, GenerateSegmentInput, TtsConfig, Voice } from "../shared/types";
+import type { CloneVoiceInput, GenerateChunkInput, TtsConfig, Voice } from "../shared/types";
 import { LocalStore } from "./store";
 
 interface ApiErrorBody {
@@ -53,7 +53,7 @@ function validateConfig(config: TtsConfig): void {
 export class AliyunCosyVoiceProvider {
   constructor(private readonly store: LocalStore) {}
 
-  async synthesize(input: GenerateSegmentInput): Promise<{ audioPath: string; requestId?: string }> {
+  async synthesize(input: GenerateChunkInput): Promise<{ audioPath: string; requestId?: string }> {
     validateConfig(input.config);
     const body = {
       model: input.config.model,
@@ -84,7 +84,7 @@ export class AliyunCosyVoiceProvider {
     const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
     const targetDir = this.store.audioDir(input.projectId);
     await fs.mkdir(targetDir, { recursive: true });
-    const audioPath = path.join(targetDir, `${input.segmentId}.wav`);
+    const audioPath = path.join(targetDir, `${input.chunkId}.wav`);
     await fs.writeFile(audioPath, audioBuffer);
     return { audioPath, requestId: result.request_id };
   }

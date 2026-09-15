@@ -72,6 +72,7 @@ export class LocalStore {
       title: title.trim() || "未命名 Podcast",
       markdown: "",
       segments: [],
+      generationChunks: [],
       tts,
       voiceId: settings.voiceId,
       createdAt: now,
