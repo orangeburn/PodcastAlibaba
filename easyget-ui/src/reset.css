@@ -1,0 +1,47 @@
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--eg-font-sans);
+  color: var(--eg-fg-primary);
+  background: var(--eg-bg-canvas);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--eg-bg-canvas);
+  color: var(--eg-fg-primary);
+  font-family: inherit;
+  line-height: var(--eg-leading-normal);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 2px solid var(--eg-border-focus);
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+}

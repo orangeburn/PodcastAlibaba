@@ -1,0 +1,159 @@
+/*
+ * Easyget Design System
+ *
+ * Use semantic tokens in product code. The --eg-color-* values are the
+ * palette; the --eg-* aliases describe what a surface or control is doing.
+ */
+
+:root {
+  /* Primitive palette */
+  --eg-color-white: #ffffff;
+  --eg-color-black: #111111;
+  --eg-color-gray-25: #fcfcfd;
+  --eg-color-gray-50: #f7f7fb;
+  --eg-color-gray-100: #f3f4f6;
+  --eg-color-gray-200: #e5e7eb;
+  --eg-color-gray-300: #d1d5db;
+  --eg-color-gray-400: #9ca3af;
+  --eg-color-gray-500: #6b7280;
+  --eg-color-gray-600: #4b5563;
+  --eg-color-gray-700: #374151;
+  --eg-color-gray-800: #1f2937;
+  --eg-color-gray-900: #111827;
+  --eg-color-blue-50: #eff6ff;
+  --eg-color-blue-600: #2563eb;
+  --eg-color-blue-700: #1d4ed8;
+  --eg-color-green-50: #ecfdf5;
+  --eg-color-green-600: #10b981;
+  --eg-color-amber-50: #fffbeb;
+  --eg-color-amber-600: #d97706;
+  --eg-color-red-50: #fef2f2;
+  --eg-color-red-600: #dc2626;
+
+  /* Semantic surfaces */
+  --eg-bg-canvas: #f9fafb;
+  --eg-bg-surface: var(--eg-color-white);
+  --eg-bg-subtle: var(--eg-color-gray-50);
+  --eg-bg-muted: var(--eg-color-gray-100);
+  --eg-bg-brand: var(--eg-color-blue-50);
+  --eg-bg-success: var(--eg-color-green-50);
+  --eg-bg-warning: var(--eg-color-amber-50);
+  --eg-bg-danger: var(--eg-color-red-50);
+
+  /* Semantic content */
+  --eg-fg-primary: var(--eg-color-gray-900);
+  --eg-fg-secondary: var(--eg-color-gray-600);
+  --eg-fg-tertiary: var(--eg-color-gray-400);
+  --eg-fg-inverse: var(--eg-color-white);
+  --eg-fg-brand: var(--eg-color-blue-600);
+  --eg-fg-success: #14804a;
+  --eg-fg-warning: var(--eg-color-amber-600);
+  --eg-fg-danger: #b42318;
+
+  /* Semantic borders and actions */
+  --eg-border-subtle: var(--eg-color-gray-200);
+  --eg-border-default: var(--eg-color-gray-300);
+  --eg-border-strong: var(--eg-color-gray-900);
+  --eg-border-focus: var(--eg-color-blue-600);
+  --eg-action-primary: var(--eg-color-gray-900);
+  --eg-action-primary-hover: var(--eg-color-black);
+  --eg-action-brand: var(--eg-color-blue-600);
+  --eg-action-brand-hover: var(--eg-color-blue-700);
+
+  /* Typography */
+  --eg-font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --eg-font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  --eg-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --eg-text-xs: 0.75rem;
+  --eg-text-sm: 0.8125rem;
+  --eg-text-md: 0.875rem;
+  --eg-text-lg: 1rem;
+  --eg-text-xl: 1.25rem;
+  --eg-text-2xl: 1.5rem;
+  --eg-text-3xl: 2.125rem;
+  --eg-leading-tight: 1.2;
+  --eg-leading-normal: 1.5;
+  --eg-leading-relaxed: 1.7;
+
+  /* Spacing */
+  --eg-space-1: 0.25rem;
+  --eg-space-2: 0.5rem;
+  --eg-space-3: 0.75rem;
+  --eg-space-4: 1rem;
+  --eg-space-5: 1.25rem;
+  --eg-space-6: 1.5rem;
+  --eg-space-8: 2rem;
+  --eg-space-10: 2.5rem;
+  --eg-space-12: 3rem;
+  --eg-space-16: 4rem;
+
+  /* Shape */
+  --eg-radius-sm: 0.375rem;
+  --eg-radius-md: 0.5rem;
+  --eg-radius-lg: 0.75rem;
+  --eg-radius-xl: 1rem;
+  --eg-radius-2xl: 1.25rem;
+  --eg-radius-pill: 999px;
+
+  /* Elevation */
+  --eg-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --eg-shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --eg-shadow-lg: 0 12px 32px rgb(15 23 42 / 0.12);
+  --eg-shadow-overlay: 0 24px 60px rgb(15 23 42 / 0.2);
+
+  /* Motion and layering */
+  --eg-duration-fast: 120ms;
+  --eg-duration-normal: 180ms;
+  --eg-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --eg-z-dropdown: 30;
+  --eg-z-drawer: 1000;
+  --eg-z-modal: 1200;
+
+  /* Compatibility aliases for the current Easyget screens. */
+  --bg-body: var(--eg-bg-canvas);
+  --bg-surface: var(--eg-bg-surface);
+  --bg-surface-secondary: var(--eg-bg-subtle);
+  --bg-surface-hover: var(--eg-bg-muted);
+  --text-primary: var(--eg-fg-primary);
+  --text-secondary: var(--eg-fg-secondary);
+  --text-tertiary: var(--eg-fg-tertiary);
+  --brand-primary: var(--eg-fg-brand);
+  --brand-light: var(--eg-bg-brand);
+  --brand-success: var(--eg-color-green-600);
+  --brand-danger: var(--eg-color-red-600);
+  --status-success: var(--eg-color-green-600);
+  --status-success-bg: var(--eg-bg-success);
+  --status-warning: var(--eg-fg-warning);
+  --status-warning-bg: var(--eg-bg-warning);
+  --status-danger: var(--eg-color-red-600);
+  --status-danger-bg: var(--eg-bg-danger);
+  --border-light: var(--eg-border-subtle);
+  --border-focus: var(--eg-border-focus);
+  --radius-md: var(--eg-radius-md);
+  --radius-lg: var(--eg-radius-lg);
+  --radius-xl: var(--eg-radius-xl);
+  --shadow-sm: var(--eg-shadow-sm);
+  --shadow-md: var(--eg-shadow-md);
+  --shadow-lg: var(--eg-shadow-lg);
+  --sans: var(--eg-font-sans);
+  --heading: var(--eg-font-display);
+  --mono: var(--eg-font-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --eg-bg-canvas: #000000;
+    --eg-bg-surface: #1c1c1e;
+    --eg-bg-subtle: #2c2c2e;
+    --eg-bg-muted: #3a3a3c;
+    --eg-fg-primary: #ffffff;
+    --eg-fg-secondary: #b8b8bd;
+    --eg-fg-tertiary: #8e8e93;
+    --eg-border-subtle: rgb(255 255 255 / 0.14);
+    --eg-border-default: rgb(255 255 255 / 0.22);
+    --eg-border-strong: #ffffff;
+    --eg-action-primary: #ffffff;
+    --eg-action-primary-hover: #e5e5ea;
+    --eg-fg-inverse: #111111;
+  }
+}

@@ -28,6 +28,8 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
+import { Badge as EasyBadge, Field as EasyField } from "../../easyget-ui/src";
+import "../../easyget-ui/src/styles.css";
 import { parseMarkdown } from "../shared/parser";
 import type { AppSettings, Project, Segment, SegmentStatus, TtsConfig, Voice } from "../shared/types";
 
@@ -61,6 +63,14 @@ function statusLabel(status: SegmentStatus): string {
 
 function statusClass(status: SegmentStatus): string {
   return `status status-${status}`;
+}
+
+function badgeTone(status: SegmentStatus): "neutral" | "brand" | "success" | "warning" | "danger" {
+  if (status === "success") return "success";
+  if (status === "failed") return "danger";
+  if (status === "generating") return "brand";
+  if (status === "needs-update") return "warning";
+  return "neutral";
 }
 
 function projectProgress(project: Project): { done: number; total: number; percent: number } {
@@ -414,7 +424,7 @@ function StudioPage({ project, progress, voices, busy, audioSrc, playingId, onTi
 }
 
 function SegmentRow({ segment, index, audioSrc, playing, busy, onPlay, onGenerate }: { segment: Segment; index: number; audioSrc?: string; playing: boolean; busy: boolean; onPlay: (id: string, path?: string) => void; onGenerate: (id: string) => void }) {
-  return <article className={`segment-row ${segment.status === "generating" ? "segment-generating" : ""}`}><div className="segment-index">{String(index + 1).padStart(2, "0")}</div><div className="segment-body"><div className="segment-topline"><span className={statusClass(segment.status)}>{segment.status === "generating" && <LoaderCircle size={11} className="spin" />}{statusLabel(segment.status)}</span><span className="segment-pause">停顿 {segment.pauseMs}ms</span></div><p>{segment.text}</p>{segment.error && <div className="segment-error">{segment.error}</div>}{playing && audioSrc && <audio className="segment-audio" controls autoPlay src={audioSrc} />}</div><div className="segment-actions"><button className="round-button" disabled={!segment.audioPath || segment.status !== "success"} onClick={() => onPlay(segment.id, segment.audioPath)} title="试听">{playing ? <Pause size={15} /> : <Play size={15} />}</button><button className="round-button" disabled={busy || segment.status === "generating"} onClick={() => onGenerate(segment.id)} title="重新生成"><RefreshCw size={15} /></button></div></article>;
+  return <article className={`segment-row ${segment.status === "generating" ? "segment-generating" : ""}`}><div className="segment-index">{String(index + 1).padStart(2, "0")}</div><div className="segment-body"><div className="segment-topline"><EasyBadge className={statusClass(segment.status)} tone={badgeTone(segment.status)}>{segment.status === "generating" && <LoaderCircle size={11} className="spin" />}{statusLabel(segment.status)}</EasyBadge><span className="segment-pause">停顿 {segment.pauseMs}ms</span></div><p>{segment.text}</p>{segment.error && <div className="segment-error">{segment.error}</div>}{playing && audioSrc && <audio className="segment-audio" controls autoPlay src={audioSrc} />}</div><div className="segment-actions"><button className="round-button" disabled={!segment.audioPath || segment.status !== "success"} onClick={() => onPlay(segment.id, segment.audioPath)} title="试听">{playing ? <Pause size={15} /> : <Play size={15} />}</button><button className="round-button" disabled={busy || segment.status === "generating"} onClick={() => onGenerate(segment.id)} title="重新生成"><RefreshCw size={15} /></button></div></article>;
 }
 
 function VoicesPage({ voices, onClone, onAdd, onDelete }: { voices: Voice[]; onClone: () => void; onAdd: () => void; onDelete: (voice: Voice) => void }) {
@@ -425,7 +435,7 @@ function SettingsPage({ settings, onChange, onSave }: { settings: AppSettings; o
   return <div className="page page-settings"><div className="page-heading"><div><div className="eyebrow">LOCAL CONFIGURATION</div><h1>设置</h1><p>配置百炼 CosyVoice，凭证只保存在当前 Windows 用户的本地数据目录。</p></div><button className="primary-button" onClick={onSave}><Save size={16} />保存设置</button></div><div className="settings-layout"><section className="settings-card panel"><div className="panel-header"><div><span className="panel-kicker">ALIYUN MODEL STUDIO</span><h2>API 连接</h2></div><span className="secure-label"><Check size={13} />本地保存</span></div><div className="form-grid"><FormField label="API Key" hint="不会写入源码或 Git"><input type="password" value={settings.apiKey} onChange={(event) => onChange({ apiKey: event.target.value })} placeholder="sk-…" autoComplete="off" /></FormField><FormField label="Model"><input value={settings.model} onChange={(event) => onChange({ model: event.target.value })} placeholder="cosyvoice-v3.5-flash" /></FormField><FormField label="API Endpoint / Base URL" hint="可填专属业务空间地址"><input value={settings.baseUrl} onChange={(event) => onChange({ baseUrl: event.target.value })} placeholder="https://dashscope.aliyuncs.com/api/v1" /></FormField><FormField label="默认 Voice ID" hint="CosyVoice v3.5 需要复刻或设计音色"><input value={settings.voiceId} onChange={(event) => onChange({ voiceId: event.target.value })} placeholder="例如：cosyvoice-v3.5-flash-…" /></FormField></div></section><section className="settings-card panel"><div className="panel-header"><div><span className="panel-kicker">PODCAST VOICE</span><h2>表达控制</h2></div><AudioLines size={19} className="panel-icon" /></div><FormField label="Instruction" hint="随每个 TTS 请求发送，不超过模型限制"><textarea className="instruction-input" value={settings.instruction} onChange={(event) => onChange({ instruction: event.target.value })} rows={3} placeholder="请用自然、沉稳的播客口吻讲述…" /></FormField><div className="range-grid"><label className="range-field"><span>语速 <output>{settings.speed.toFixed(2)}×</output></span><input type="range" min="0.5" max="2" step="0.05" value={settings.speed} onChange={(event) => onChange({ speed: Number(event.target.value) })} /></label><label className="range-field"><span>音量 <output>{settings.volume.toFixed(0)} / 100</output></span><input type="range" min="0" max="100" step="1" value={settings.volume} onChange={(event) => onChange({ volume: Number(event.target.value) })} /></label></div></section></div><div className="settings-footnote"><CircleHelp size={15} /><span>默认配置只影响新建项目；已打开项目会保存自己的 TTS 配置。</span></div></div>;
 }
 
-function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <label className="form-field"><span className="form-label">{label}<small>{hint}</small></span>{children}</label>; }
+function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <EasyField label={label} hint={hint} className="form-field">{children}</EasyField>; }
 
 function CloneVoiceModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (input: { name: string; audioPath: string }) => void }) {
   const [name, setName] = useState("");

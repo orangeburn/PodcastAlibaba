@@ -19,7 +19,14 @@ src/
    ├─ parser.ts            Markdown 清理与语义分段
    ├─ hash.ts              片段文本 hash
    └─ types.ts             项目与 IPC 类型
+
+easyget-ui/
+├─ src/components.tsx     共用 React UI primitives
+├─ src/components.css      共用组件样式
+└─ src/tokens.css          共用 design tokens
 ```
+
+renderer 通过相对路径直接使用本地 `easyget-ui`，不需要额外发布或部署私有 npm 包。
 
 ## Windows 启动
 
