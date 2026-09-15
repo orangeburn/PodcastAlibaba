@@ -6,7 +6,6 @@ import {
   CircleHelp,
   FileAudio,
   FileText,
-  FolderOpen,
   Headphones,
   LayoutList,
   Library,
@@ -99,6 +98,7 @@ function App() {
   const projectRef = useRef<Project | null>(null);
   const [audioSrc, setAudioSrc] = useState<Record<string, string>>({});
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [manualVoiceOpen, setManualVoiceOpen] = useState(false);
 
@@ -139,15 +139,20 @@ function App() {
     return saved;
   }
 
-  async function createProject() {
+  async function createProject(title = "") {
     try {
-      const project = await window.podcastApi.projects.create();
+      const project = await window.podcastApi.projects.create(title);
+      setNewProjectOpen(false);
       selectProject(project);
       setProjects((items) => [project, ...items]);
       setNotice({ type: "success", text: "已创建新项目，写下你的第一段稿件吧。" });
     } catch (error) {
       setNotice({ type: "error", text: error instanceof Error ? error.message : "创建项目失败" });
     }
+  }
+
+  function requestCreateProject() {
+    setNewProjectOpen(true);
   }
 
   async function importMarkdown() {
@@ -387,12 +392,11 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumb"><span>声稿台</span><ChevronRight size={14} /><span className="muted">{view === "projects" ? "项目" : view === "studio" ? "工作台" : view === "voices" ? "音色库" : "设置"}</span>{currentProject && view === "studio" && <><ChevronRight size={14} /><span>{currentProject.title || "未命名 Podcast"}</span></>}</div>
-          <div className="topbar-actions"><span className="connection-dot" />离线优先 <button className="icon-button"><MoreHorizontal size={18} /></button></div>
         </header>
 
         {notice && <div className={`toast toast-${notice.type}`}><span>{notice.text}</span><button onClick={() => setNotice(null)}><X size={15} /></button></div>}
 
-        {view === "projects" && <ProjectsPage projects={projects} onCreate={createProject} onOpen={selectProject} />}
+        {view === "projects" && <ProjectsPage projects={projects} onCreate={requestCreateProject} onOpen={selectProject} />}
         {view === "studio" && currentProject && <StudioPage project={currentProject} progress={activeProgress!} voices={settings.voices} busy={busy} audioSrc={audioSrc} playingId={playingId} onTitleChange={updateTitle} onScriptChange={updateScript} onImport={importMarkdown} onConfigChange={updateTtsConfig} onPlay={playAudio} onGenerate={generateSegment} onGenerateAll={generateAll} onCompose={composeFinal} onExport={async () => { if (currentProject.finalAudioPath) { const output = await window.podcastApi.audio.export(currentProject.finalAudioPath); if (output) setNotice({ type: "success", text: `已导出到 ${output}` }); } }} />}
         {view === "voices" && <VoicesPage voices={settings.voices} onClone={() => setCloneOpen(true)} onAdd={() => setManualVoiceOpen(true)} onDelete={deleteVoice} />}
         {view === "settings" && <SettingsPage settings={settingsDraft} onChange={(patch) => setSettingsDraft((current) => ({ ...current, ...patch }))} onSave={saveSettings} />}
@@ -400,6 +404,7 @@ function App() {
 
       {cloneOpen && <CloneVoiceModal busy={busy} onClose={() => setCloneOpen(false)} onSubmit={cloneVoice} />}
       {manualVoiceOpen && <ManualVoiceModal onClose={() => setManualVoiceOpen(false)} onSubmit={addManualVoice} />}
+      {newProjectOpen && <NewProjectModal onClose={() => setNewProjectOpen(false)} onSubmit={createProject} />}
     </div>
   );
 }
@@ -424,7 +429,7 @@ function StudioPage({ project, progress, voices, busy, audioSrc, playingId, onTi
   function commitScript() { if (localScript !== project.markdown) onScriptChange(localScript); }
   function commitTitle() { if (localTitle !== project.title) onTitleChange(localTitle); }
 
-  return <div className="page page-studio"><div className="studio-heading"><div className="studio-title-wrap"><button className="back-button" title="回到项目列表"><FolderOpen size={17} /></button><div><input className="title-input" value={localTitle} onChange={(event) => setLocalTitle(event.target.value)} onBlur={commitTitle} /><div className="saved-line"><span className="saved-dot" />自动保存 · 本地项目</div></div></div><div className="studio-actions"><button className="secondary-button small" onClick={onImport}><Upload size={15} />导入 .md</button><button className="primary-button small" onClick={onGenerateAll} disabled={busy || progress.total === 0}><Sparkles size={15} />{busy ? "生成中…" : "生成全部"}</button></div></div>
+  return <div className="page page-studio"><div className="studio-heading"><div className="studio-title-wrap"><div><input className="title-input" aria-label="项目名称" value={localTitle} onChange={(event) => setLocalTitle(event.target.value)} onBlur={commitTitle} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commitTitle(); event.currentTarget.blur(); } }} /><div className="saved-line"><span className="saved-dot" />自动保存 · 本地项目</div></div></div><div className="studio-actions"><button className="secondary-button small" onClick={onImport}><Upload size={15} />导入 .md</button><button className="primary-button small" onClick={onGenerateAll} disabled={busy || progress.total === 0}><Sparkles size={15} />{busy ? "生成中…" : "生成全部"}</button></div></div>
     <div className="studio-layout"><section className="script-panel panel"><div className="panel-header"><div><span className="panel-kicker">SOURCE SCRIPT</span><h2>Markdown 稿件</h2></div><span className="panel-count">{localScript.length.toLocaleString()} 字</span></div><textarea className="script-editor" value={localScript} onChange={(event) => setLocalScript(event.target.value)} onBlur={commitScript} placeholder={'从这里开始写你的稿件…\n\n支持 Markdown 标题、段落、列表与链接。生成前会自动清理格式，但会保留结构进行分段。'} spellCheck={false} /><div className="editor-footer"><span><FileText size={14} />内容是项目唯一稿件源</span><button className="text-button" onClick={commitScript}><Save size={14} />保存稿件</button></div></section>
       <section className="segments-panel"><div className="panel-header segments-header"><div><span className="panel-kicker">VOICE TIMELINE</span><h2>分段结果 <span className="count-pill">{progress.total}</span></h2></div><div className="segment-progress"><span>{progress.done}/{progress.total} 已生成</span><div className="mini-progress"><div style={{ width: `${progress.percent}%` }} /></div></div></div>{project.segments.length === 0 ? <div className="segments-empty"><div className="empty-lines"><span /><span /><span /></div><p>输入稿件后将自动解析成适合 TTS 的语义片段。</p></div> : <div className="segment-list">{project.segments.map((segment, index) => <SegmentRow key={segment.id} segment={segment} index={index} audioSrc={audioSrc[segment.audioPath ?? ""]} playing={playingId === segment.id} busy={busy} onPlay={onPlay} onGenerate={onGenerate} />)}</div>}</section></div>
     <div className="bottom-dock"><div className="dock-config"><div className="dock-label"><SlidersHorizontal size={15} /><span>TTS 配置</span></div><select value={project.tts.voiceId} onChange={(event) => onConfigChange({ voiceId: event.target.value })}><option value="">选择音色…</option>{voices.map((voice) => <option key={voice.id} value={voice.voiceId}>{voice.name} · {voice.model}</option>)}</select><div className="voice-id-field"><span>Voice ID</span><input value={project.tts.voiceId} onChange={(event) => onConfigChange({ voiceId: event.target.value })} placeholder="手动填写" /></div><label className="compact-control"><span>语速</span><input type="number" min="0.5" max="2" step="0.05" value={project.tts.speed} onChange={(event) => onConfigChange({ speed: Number(event.target.value) })} /></label><label className="compact-control"><span>音量</span><input type="number" min="0" max="100" step="1" value={project.tts.volume} onChange={(event) => onConfigChange({ volume: Number(event.target.value) })} /></label></div><div className="dock-output">{project.finalAudioPath && audioSrc[project.finalAudioPath] ? <audio controls src={audioSrc[project.finalAudioPath]} /> : project.finalAudioPath ? <button className="secondary-button" disabled={busy} onClick={() => onPlay("final", project.finalAudioPath)}><Play size={15} />完整试听</button> : <button className="secondary-button" disabled={!readyForCompose || busy} onClick={onCompose}>{readyForCompose ? <><Play size={15} />生成完整试听</> : "完成全部片段后试听"}</button>}<button className="export-button" disabled={!project.finalAudioPath || busy} onClick={onExport}><FileAudio size={16} />导出 WAV</button></div></div>
@@ -452,6 +457,23 @@ function FormField({ label, hint, children }: { label: string; hint?: string; ch
     return child;
   });
   return <EasyField label={label} hint={hint} className="form-field">{controls}</EasyField>;
+}
+
+function NewProjectModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (title: string) => void }) {
+  const [title, setTitle] = useState("");
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (title.trim()) onSubmit(title.trim());
+  }
+  return <Modal title="新建 Podcast 项目" subtitle="NEW PROJECT · 本地保存" onClose={onClose}>
+    <form className="modal-form" onSubmit={submit}>
+      <FormField label="项目名称" hint="之后也可以在工作台标题处修改">
+        <input autoFocus required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：第 01 期 · 我的主题" />
+      </FormField>
+      <div className="modal-tip"><FileText size={14} />项目会保存标题、Markdown 稿件、分段状态和生成的本地音频。</div>
+      <div className="modal-actions"><button className="secondary-button" type="button" onClick={onClose}>取消</button><EasyButton type="submit" variant="primary" size="md" className="primary-button" disabled={!title.trim()} leadingIcon={<Plus size={15} />}>创建项目</EasyButton></div>
+    </form>
+  </Modal>;
 }
 
 function CloneVoiceModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (input: { name: string; audioPath: string }) => void }) {
