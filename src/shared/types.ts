@@ -28,13 +28,18 @@ export interface Segment {
 }
 
 export interface GenerationChunk {
-  id: string;
+  /** Stable identity of the smallest generated audio asset. */
+  chunkId: string;
+  /** @deprecated Generation chunks before the identity migration used `id`. */
+  id?: string;
   paragraphId: string;
   segmentIds: string[];
   text: string;
   textHash: string;
   pauseMs: number;
   status: SegmentStatus;
+  /** Monotonically increases whenever this chunk is regenerated. */
+  generation: number;
   audioPath?: string;
   requestId?: string;
   error?: string;

@@ -2,6 +2,7 @@ import { app } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { normalizeProject, projectChunks } from "../shared/generation";
 import type { AppSettings, Project, TtsConfig, Voice } from "../shared/types";
 
 const defaultTts: TtsConfig = {
@@ -56,12 +57,50 @@ export class LocalStore {
         const project = JSON.parse(
           await fs.readFile(path.join(this.projectsRoot, entry.name, "project.json"), "utf8"),
         ) as Project;
-        projects.push(project);
+        projects.push(await this.migrateLoadedProject(project, path.join(this.projectsRoot, entry.name)));
       } catch {
         // Keep a single corrupt project from making the whole project list unusable.
       }
     }
     return projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+
+  private async migrateLoadedProject(project: Project, projectDir: string): Promise<Project> {
+    const preliminary = normalizeProject(project);
+    const invalidAudioPaths = await this.findInvalidAudioPaths(preliminary, projectDir);
+    const migrated = normalizeProject(project, invalidAudioPaths);
+    if (JSON.stringify(project) !== JSON.stringify(migrated)) {
+      await this.saveProject(migrated);
+    }
+    return migrated;
+  }
+
+  private async findInvalidAudioPaths(project: Project, projectDir: string): Promise<Set<string>> {
+    const invalid = new Set<string>();
+    const seen = new Map<string, string[]>();
+    for (const chunk of projectChunks(project)) {
+      if (typeof chunk.audioPath !== "string" || !chunk.audioPath.trim()) continue;
+      const key = chunk.audioPath.replaceAll("\\", "/").toLowerCase();
+      const paths = seen.get(key) ?? [];
+      paths.push(chunk.audioPath);
+      seen.set(key, paths);
+      const normalizedPath = chunk.audioPath.toLowerCase();
+      if (normalizedPath.includes("undefined.wav") || normalizedPath.includes("null.wav")) invalid.add(chunk.audioPath);
+    }
+    for (const [key, paths] of seen) {
+      if (paths.length > 1) {
+        for (const audioPath of paths) invalid.add(audioPath);
+        continue;
+      }
+      const audioPath = paths[0];
+      try {
+        const stat = await fs.stat(path.isAbsolute(audioPath) ? audioPath : path.resolve(projectDir, audioPath));
+        if (!stat.isFile()) invalid.add(audioPath);
+      } catch {
+        invalid.add(audioPath);
+      }
+    }
+    return invalid;
   }
 
   async createProject(title: string, settings: AppSettings): Promise<Project> {

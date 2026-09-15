@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { assertValidChunkId } from "../shared/generation";
 import type { CloneVoiceInput, GenerateChunkInput, TtsConfig, Voice } from "../shared/types";
 import { LocalStore } from "./store";
 
@@ -54,6 +55,7 @@ export class AliyunCosyVoiceProvider {
   constructor(private readonly store: LocalStore) {}
 
   async synthesize(input: GenerateChunkInput): Promise<{ audioPath: string; requestId?: string }> {
+    assertValidChunkId(input.chunkId);
     validateConfig(input.config);
     const body = {
       model: input.config.model,
