@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
   Check,
@@ -28,7 +28,15 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { Badge as EasyBadge, Field as EasyField } from "../../easyget-ui/src";
+import {
+  Badge as EasyBadge,
+  Button as EasyButton,
+  Card as EasyCard,
+  Field as EasyField,
+  Input as EasyInput,
+  Select as EasySelect,
+  Textarea as EasyTextarea,
+} from "../../easyget-ui/src";
 import "../../easyget-ui/src/styles.css";
 import { parseMarkdown } from "../shared/parser";
 import type { AppSettings, Project, Segment, SegmentStatus, TtsConfig, Voice } from "../shared/types";
@@ -435,7 +443,16 @@ function SettingsPage({ settings, onChange, onSave }: { settings: AppSettings; o
   return <div className="page page-settings"><div className="page-heading"><div><div className="eyebrow">LOCAL CONFIGURATION</div><h1>设置</h1><p>配置百炼 CosyVoice，凭证只保存在当前 Windows 用户的本地数据目录。</p></div><button className="primary-button" onClick={onSave}><Save size={16} />保存设置</button></div><div className="settings-layout"><section className="settings-card panel"><div className="panel-header"><div><span className="panel-kicker">ALIYUN MODEL STUDIO</span><h2>API 连接</h2></div><span className="secure-label"><Check size={13} />本地保存</span></div><div className="form-grid"><FormField label="API Key" hint="不会写入源码或 Git"><input type="password" value={settings.apiKey} onChange={(event) => onChange({ apiKey: event.target.value })} placeholder="sk-…" autoComplete="off" /></FormField><FormField label="Model"><input value={settings.model} onChange={(event) => onChange({ model: event.target.value })} placeholder="cosyvoice-v3.5-flash" /></FormField><FormField label="API Endpoint / Base URL" hint="可填专属业务空间地址"><input value={settings.baseUrl} onChange={(event) => onChange({ baseUrl: event.target.value })} placeholder="https://dashscope.aliyuncs.com/api/v1" /></FormField><FormField label="默认 Voice ID" hint="CosyVoice v3.5 需要复刻或设计音色"><input value={settings.voiceId} onChange={(event) => onChange({ voiceId: event.target.value })} placeholder="例如：cosyvoice-v3.5-flash-…" /></FormField></div></section><section className="settings-card panel"><div className="panel-header"><div><span className="panel-kicker">PODCAST VOICE</span><h2>表达控制</h2></div><AudioLines size={19} className="panel-icon" /></div><FormField label="Instruction" hint="随每个 TTS 请求发送，不超过模型限制"><textarea className="instruction-input" value={settings.instruction} onChange={(event) => onChange({ instruction: event.target.value })} rows={3} placeholder="请用自然、沉稳的播客口吻讲述…" /></FormField><div className="range-grid"><label className="range-field"><span>语速 <output>{settings.speed.toFixed(2)}×</output></span><input type="range" min="0.5" max="2" step="0.05" value={settings.speed} onChange={(event) => onChange({ speed: Number(event.target.value) })} /></label><label className="range-field"><span>音量 <output>{settings.volume.toFixed(0)} / 100</output></span><input type="range" min="0" max="100" step="1" value={settings.volume} onChange={(event) => onChange({ volume: Number(event.target.value) })} /></label></div></section></div><div className="settings-footnote"><CircleHelp size={15} /><span>默认配置只影响新建项目；已打开项目会保存自己的 TTS 配置。</span></div></div>;
 }
 
-function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) { return <EasyField label={label} hint={hint} className="form-field">{children}</EasyField>; }
+function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  const controls = React.Children.map(children, (child) => {
+    if (!React.isValidElement(child) || typeof child.type !== "string") return child;
+    if (child.type === "input") return <EasyInput {...(child.props as React.ComponentProps<"input">)} />;
+    if (child.type === "select") return <EasySelect {...(child.props as React.ComponentProps<"select">)} />;
+    if (child.type === "textarea") return <EasyTextarea {...(child.props as React.ComponentProps<"textarea">)} />;
+    return child;
+  });
+  return <EasyField label={label} hint={hint} className="form-field">{controls}</EasyField>;
+}
 
 function CloneVoiceModal({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (input: { name: string; audioPath: string }) => void }) {
   const [name, setName] = useState("");
@@ -450,6 +467,6 @@ function ManualVoiceModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
   return <Modal title="添加已有音色" subtitle="保存到本机音色库" onClose={onClose}><div className="modal-form"><FormField label="名称"><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：官方女声" /></FormField><FormField label="Voice ID"><input value={voiceId} onChange={(event) => setVoiceId(event.target.value)} placeholder="输入百炼 Voice ID" /></FormField><FormField label="对应模型"><input value={model} onChange={(event) => setModel(event.target.value)} /></FormField><div className="modal-actions"><button className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" disabled={!name.trim() || !voiceId.trim()} onClick={() => onSubmit({ name: name.trim(), voiceId: voiceId.trim(), model: model.trim() })}><Plus size={15} />加入音色库</button></div></div></Modal>;
 }
 
-function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) { return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="modal"><div className="modal-header"><div><span className="panel-kicker">{subtitle}</span><h2>{title}</h2></div><button className="icon-button" onClick={onClose}><X size={18} /></button></div>{children}</div></div>; }
+function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) { return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><EasyCard className="modal" padding="lg"><div className="modal-header"><div><span className="panel-kicker">{subtitle}</span><h2>{title}</h2></div><EasyButton variant="ghost" size="sm" className="icon-button" aria-label="关闭" onClick={onClose}><X size={18} /></EasyButton></div>{children}</EasyCard></div>; }
 
 export default App;
